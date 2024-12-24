@@ -64,11 +64,41 @@ defmodule Jason do
       iex> Jason.decode("invalid")
       {:error, %Jason.DecodeError{data: "invalid", position: 0, token: nil}}
   """
-  @spec decode(iodata, [decode_opt]) :: {:ok, term} | {:error, DecodeError.t()}
-  def decode(input, opts \\ []) do
+  if System.version() |> Version.match?("> 1.18.0") do
+    @spec decode(iodata, [decode_opt]) :: {:ok, term} | {:error, DecodeError.t()}
+    def decode(input) do
+      input = IO.iodata_to_binary(input)
+      case JSON.decode(input) do
+        {:ok, result} ->
+          {:ok, result}
+        {:error, {:invalid_byte, position, _byte}} ->
+          {:error, %DecodeError{data: input, position: position}}
+        {:error, {:unexpected_end, position}} ->
+          {:error, %DecodeError{data: input, position: position}}
+        {:error, {:unexpected_sequence, position, token}} ->
+          {:error, %DecodeError{data: input, position: position, token: token}}
+      end
+    end
+
+    def decode(input, []) do
+      decode(input)
+    end
+
+    def decode(input, opts) do
+      do_decode(input, opts)
+    end
+  else
+    @spec decode(iodata, [decode_opt]) :: {:ok, term} | {:error, DecodeError.t()}
+    def decode(input, opts \\ []) do
+      do_decode(input, opts)
+    end
+  end
+
+  defp do_decode(input, opts) do
     input = IO.iodata_to_binary(input)
     Decoder.parse(input, format_decode_opts(opts))
   end
+
 
   @doc """
   Parses a JSON value from `input` iodata.
